@@ -4,7 +4,7 @@
     'label' => null,
     'helper' => null,
     'required' => false,
-    'options' => [], // list of ['value' => ..., 'label' => ..., 'description' => ?string, 'disabled' => bool, 'dot' => ?string, 'labelClass' => ?string]
+    'options' => [], // list of ['value' => ..., 'label' => ..., 'description' => ?string, 'disabled' => bool, 'dot' => ?string, 'state' => ?string, 'labelClass' => ?string]
     'placeholder' => 'Select…',
     'emptyText' => 'No options available.',
     'live' => false,
@@ -90,7 +90,7 @@
         get visibleOptions() {
             const query = this.query.toLowerCase().trim();
             if (query === '') return this.options;
-            return this.options.filter((option) => !option.header && [option.label, option.value, option.description]
+            return this.options.filter((option) => !option.header && [option.label, option.value, option.description, option.state]
                 .some((text) => String(text ?? '').toLowerCase().includes(query)));
         },
         get customOption() {
@@ -234,6 +234,7 @@
             <span class="listbox-trigger-label flex items-center gap-2">
                 <span x-show="selectedOption?.dot" class="size-1.5 shrink-0 rounded-full" :class="dotClass(selectedOption?.dot)"></span>
                 <span class="min-w-0 truncate" :class="selectedOption?.labelClass" x-text="current">{{ $multiple ? $multipleLabel : '' }}</span>
+                <span x-show="selectedOption?.state" class="shrink-0 text-xs text-neutral-500 dark:text-fg-dim" x-text="selectedOption?.state"></span>
             </span>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
                 stroke="currentColor" class="size-3.5 shrink-0 opacity-60">
@@ -287,7 +288,11 @@
                                     <span class="flex min-w-0 items-center gap-2 text-left">
                                         <span x-show="option.dot" class="size-1.5 shrink-0 rounded-full" :class="dotClass(option.dot)"></span>
                                         <span class="flex min-w-0 flex-col items-start">
-                                            <span class="truncate" :class="option.labelClass" x-text="option.label"></span>
+                                            <span class="flex min-w-0 items-baseline gap-2">
+                                                <span class="truncate" :class="option.labelClass" x-text="option.label"></span>
+                                                <span x-show="option.state" x-text="option.state"
+                                                    class="shrink-0 text-xs text-neutral-500 dark:text-fg-dim"></span>
+                                            </span>
                                             <span x-show="option.description" x-text="option.description"
                                                 class="text-xs whitespace-normal text-neutral-500 dark:text-fg-dim"></span>
                                         </span>
@@ -355,7 +360,11 @@
                                 <span class="flex min-w-0 items-center gap-2 text-left">
                                     <span x-show="option.dot" class="size-1.5 shrink-0 rounded-full" :class="dotClass(option.dot)"></span>
                                     <span class="flex min-w-0 flex-col items-start">
-                                        <span class="truncate" :class="option.labelClass" x-text="option.label"></span>
+                                        <span class="flex min-w-0 items-baseline gap-2">
+                                            <span class="truncate" :class="option.labelClass" x-text="option.label"></span>
+                                            <span x-show="option.state" x-text="option.state"
+                                                class="shrink-0 text-xs text-neutral-500 dark:text-fg-dim"></span>
+                                        </span>
                                         <span x-show="option.description" x-text="option.description"
                                             class="text-xs whitespace-normal text-neutral-500 dark:text-fg-dim"></span>
                                     </span>

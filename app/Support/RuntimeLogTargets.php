@@ -18,7 +18,7 @@ class RuntimeLogTargets
      * @param  list<array{uuid: string, name: string, containers: list<array<string, mixed>>}>  $servers
      * @return array{
      *     deployments: list<array{value: string, label: string, labelClass: string}>,
-     *     services: list<array{value: string, label: string, dot: string, description?: string}>,
+     *     services: list<array{value: string, label: string, dot: string, description?: string, state?: string}>,
      *     deployment: string,
      *     service: string,
      *     sources: list<array{server: string, container: string, label: string}>,
@@ -255,17 +255,22 @@ class RuntimeLogTargets
 
     /**
      * @param  array<string, list<array{state: string}>>  $groups
-     * @return list<array{value: string, label: string, dot: string, description?: string}>
+     * @return list<array{value: string, label: string, dot: string, description?: string, state?: string}>
      */
     private static function serviceOptions(array $groups): array
     {
         $options = [];
         foreach ($groups as $key => $containers) {
+            $states = array_column($containers, 'state');
             $option = [
                 'value' => $key,
                 'label' => $key,
-                'dot' => self::serviceDot(array_column($containers, 'state')),
+                'dot' => self::serviceDot($states),
             ];
+            $state = self::serviceStateLabel($states);
+            if ($state !== null) {
+                $option['state'] = $state;
+            }
             if (count($containers) > 1) {
                 $option['description'] = count($containers).' containers';
             }
@@ -298,6 +303,47 @@ class RuntimeLogTargets
         }
 
         return 'warning';
+    }
+
+    /**
+     * A running service needs no caption. Anything else is named: Stopped when
+     * nothing is running, the transitional state when that is the only problem,
+     * and Degraded when the containers disagree.
+     *
+     * @param  list<string>  $states
+     */
+    private static function serviceStateLabel(array $states): ?string
+    {
+        $problems = [];
+        $anyLive = false;
+        foreach ($states as $state) {
+            $state = strtolower($state);
+            if (in_array($state, ['running', 'starting', 'restarting', 'degraded'], true)) {
+                $anyLive = true;
+            }
+            if ($state !== 'running') {
+                $problems[$state] = true;
+            }
+        }
+        if ($problems === []) {
+            return null;
+        }
+
+        $problemStates = array_keys($problems);
+        if ($problemStates === ['starting']) {
+            return 'Starting';
+        }
+        if ($problemStates === ['restarting']) {
+            return 'Restarting';
+        }
+        if ($problemStates === ['degraded']) {
+            return 'Degraded';
+        }
+        if (! $anyLive) {
+            return 'Stopped';
+        }
+
+        return 'Degraded';
     }
 
     /**

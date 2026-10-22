@@ -44,6 +44,8 @@ it('keeps service options left aligned beside their status dot', function () {
 
     $page->script("document.querySelector('[aria-label=\"Dismiss notifications reminder\"]')?.click()");
     $page->click('#service-trigger')
+        ->assertSee('Stopped')
+        ->assertSee('Degraded')
         ->assertSee('2 containers')
         ->assertSee('worker');
 
@@ -51,13 +53,19 @@ it('keeps service options left aligned beside their status dot', function () {
         (() => {
             const options = [...document.querySelectorAll('#service-panel .listbox-option')];
             if (options.length < 3) return false;
+            const stateText = (option) => [...option.querySelectorAll('span')]
+                .map((element) => element.textContent.trim())
+                .find((text) => ['Stopped', 'Degraded', 'Starting', 'Restarting'].includes(text)) ?? '';
             return options.every((option) => {
                 const label = option.querySelector('span.truncate');
                 if (!label) return false;
                 const optionLeft = option.getBoundingClientRect().left;
                 const labelLeft = label.getBoundingClientRect().left;
                 const optionRight = option.getBoundingClientRect().right;
-                return labelLeft - optionLeft < 40 && labelLeft < (optionLeft + optionRight) / 2;
+                const name = label.textContent.trim();
+                const state = stateText(option);
+                const expected = name === 'api' ? 'Stopped' : (name === 'web' ? 'Degraded' : '');
+                return labelLeft - optionLeft < 40 && labelLeft < (optionLeft + optionRight) / 2 && state === expected;
             });
         })()
     JS))->toBeTrue();

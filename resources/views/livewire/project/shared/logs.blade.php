@@ -92,7 +92,7 @@
                                 </div>
                             @endif
                             @if (count($logTargets['services']) > 1)
-                                <div class="w-full sm:w-60" wire:key="runtime-logs-services-{{ collect($logTargets['services'])->map(fn (array $option): string => $option['value'].$option['label'].$option['dot'].($option['description'] ?? ''))->join('|') }}">
+                                <div class="w-full sm:w-60" wire:key="runtime-logs-services-{{ collect($logTargets['services'])->map(fn (array $option): string => $option['value'].$option['label'].$option['dot'].($option['state'] ?? '').($option['description'] ?? ''))->join('|') }}">
                                     <x-forms.listbox id="service" label="Service" live searchable portal
                                         searchPlaceholder="Search services" :options="$logTargets['services']" />
                                 </div>

@@ -108,7 +108,7 @@ it('names services from the compose label, then coolify.name, then the container
         ->and($targets['sources'][0]['container'])->toBe('compose-name');
 });
 
-it('gives each service one option and colors it from the container states', function (array $states, string $dot, ?string $description) {
+it('gives each service one option and colors it from the container states', function (array $states, string $dot, ?string $description, ?string $stateLabel) {
     $containers = [];
     foreach ($states as $index => $state) {
         $containers[] = runtimeLogContainer('web-'.$index, 'com.docker.compose.service=web', $state);
@@ -121,12 +121,14 @@ it('gives each service one option and colors it from the container states', func
     expect($option['label'])->toBe('web')
         ->and($option['value'])->toBe('web')
         ->and($option['dot'])->toBe($dot)
-        ->and($option['description'] ?? null)->toBe($description);
+        ->and($option['description'] ?? null)->toBe($description)
+        ->and($option['state'] ?? null)->toBe($stateLabel);
 })->with([
-    'running' => [['running'], 'success', null],
-    'starting' => [['starting'], 'warning', null],
-    'mixed' => [['running', 'exited'], 'warning', '2 containers'],
-    'stopped' => [['exited', 'dead'], 'error', '2 containers'],
+    'running' => [['running'], 'success', null, null],
+    'starting' => [['starting'], 'warning', null, 'Starting'],
+    'restarting' => [['running', 'restarting'], 'warning', '2 containers', 'Restarting'],
+    'mixed' => [['running', 'exited'], 'warning', '2 containers', 'Degraded'],
+    'stopped' => [['exited', 'dead'], 'error', '2 containers', 'Stopped'],
 ]);
 
 it('defaults to the first running service and keeps the requested service key', function () {
@@ -143,8 +145,11 @@ it('defaults to the first running service and keeps the requested service key', 
 
     expect(array_column($targets['services'], 'label'))->toBe(['api', 'web', 'worker'])
         ->and($targets['services'][0]['dot'])->toBe('error')
+        ->and($targets['services'][0]['state'])->toBe('Stopped')
         ->and($targets['services'][1]['dot'])->toBe('warning')
+        ->and($targets['services'][1]['state'])->toBe('Degraded')
         ->and($targets['services'][1]['description'])->toBe('2 containers')
+        ->and($targets['services'][2]['state'] ?? null)->toBeNull()
         ->and($targets['service'])->toBe('web')
         ->and(array_column($targets['sources'], 'container'))->toBe(['web-new', 'web-old']);
 
