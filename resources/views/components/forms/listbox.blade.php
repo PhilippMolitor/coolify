@@ -4,7 +4,7 @@
     'label' => null,
     'helper' => null,
     'required' => false,
-    'options' => [], // list of ['value' => ..., 'label' => ..., 'description' => ?string, 'disabled' => bool]
+    'options' => [], // list of ['value' => ..., 'label' => ..., 'description' => ?string, 'disabled' => bool, 'dot' => ?string, 'labelClass' => ?string]
     'placeholder' => 'Select…',
     'emptyText' => 'No options available.',
     'live' => false,
@@ -108,6 +108,21 @@
             return this.options;
         },
         @endif
+        get selectedOption() {
+            @if ($multiple)
+                return null;
+            @else
+                return this.options.find((option) => String(option.value) === String(this.value)) ?? null;
+            @endif
+        },
+        dotClass(dot) {
+            return {
+                success: 'bg-success',
+                warning: 'bg-warning',
+                error: 'bg-error',
+                neutral: 'bg-neutral-400',
+            }[dot] ?? '';
+        },
         value: @if (!$wire) @js($value) @elseif ($live && ! $onChange) @entangle($id).live @else @entangle($id) @endif,
         @if ($multiple)
         get selected() {
@@ -216,7 +231,10 @@
         <button x-ref="trigger" id="{{ $triggerId }}" type="button" class="listbox-trigger" @click="toggle()"
             @disabled($disabled) {{ $attributes->whereStartsWith('x-bind:disabled') }} aria-haspopup="listbox"
             :aria-expanded="open" @if ($tooltip) :title="title" @endif>
-            <span class="listbox-trigger-label" x-text="current">{{ $multiple ? $multipleLabel : '' }}</span>
+            <span class="listbox-trigger-label flex items-center gap-2">
+                <span x-show="selectedOption?.dot" class="size-1.5 shrink-0 rounded-full" :class="dotClass(selectedOption?.dot)"></span>
+                <span class="min-w-0 truncate" :class="selectedOption?.labelClass" x-text="current">{{ $multiple ? $multipleLabel : '' }}</span>
+            </span>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
                 stroke="currentColor" class="size-3.5 shrink-0 opacity-60">
                 <path stroke-linecap="round" stroke-linejoin="round" d="m8 9 4-4 4 4m0 6-4 4-4-4" />
@@ -266,8 +284,9 @@
                                 <button type="button" class="listbox-option" role="option"
                                     :class="{ 'listbox-option-disabled': option.disabled }"
                                     :aria-selected="isSelected(option)" @click="choose(option)">
+                                    <span x-show="option.dot" class="size-1.5 shrink-0 rounded-full" :class="dotClass(option.dot)"></span>
                                     <span class="flex min-w-0 flex-col">
-                                        <span class="truncate" x-text="option.label"></span>
+                                        <span class="truncate" :class="option.labelClass" x-text="option.label"></span>
                                         <span x-show="option.description" x-text="option.description"
                                             class="text-xs whitespace-normal text-neutral-500 dark:text-fg-dim"></span>
                                     </span>
@@ -331,8 +350,9 @@
                             <button type="button" class="listbox-option" role="option"
                                 :class="{ 'listbox-option-disabled': option.disabled }"
                                 :aria-selected="isSelected(option)" @click="choose(option)">
+                                <span x-show="option.dot" class="size-1.5 shrink-0 rounded-full" :class="dotClass(option.dot)"></span>
                                 <span class="flex min-w-0 flex-col">
-                                    <span class="truncate" x-text="option.label"></span>
+                                    <span class="truncate" :class="option.labelClass" x-text="option.label"></span>
                                     <span x-show="option.description" x-text="option.description"
                                         class="text-xs whitespace-normal text-neutral-500 dark:text-fg-dim"></span>
                                 </span>

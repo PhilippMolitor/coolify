@@ -95,6 +95,40 @@ test('formats timestamps in the server timezone and falls back to UTC', () => {
     assert.equal(createTimestampFormatter('Not/AZone')('2025-12-04T11:48:39Z'), '2025-Dec-04 11:48:39');
 });
 
+test('reads a source tag and searches it without changing the level', () => {
+    const lines = parseLogLines(
+        'Frankfurt\t2026-09-28T10:00:01Z hello from frankfurt\nHelsinki\t2026-09-28T10:00:02Z ERROR failed there\nplain line',
+        idGenerator(),
+    );
+
+    assert.deepEqual(lines.map(({ source, ts, text, level }) => ({ source, ts, text, level })), [
+        { source: 'Frankfurt', ts: '2026-09-28T10:00:01Z', text: 'hello from frankfurt', level: 'info' },
+        { source: 'Helsinki', ts: '2026-09-28T10:00:02Z', text: 'ERROR failed there', level: 'error' },
+        { source: '', ts: '', text: 'plain line', level: 'info' },
+    ]);
+    assert.deepEqual(
+        filterLogLines(lines, { error: true, warning: true, debug: true, info: true }, 'helsinki').map((line) => line.source),
+        ['Helsinki'],
+    );
+});
+
+test('drops repeated lines per source and keeps timestamp order', () => {
+    const nextId = idGenerator();
+    const existing = parseLogLines(
+        'Frankfurt\t2026-09-28T10:00:01Z same\nHelsinki\t2026-09-28T10:00:01Z same',
+        nextId,
+    );
+    const incoming = parseLogLines(
+        'Frankfurt\t2026-09-28T10:00:01Z same\nHelsinki\t2026-09-28T10:00:02Z next\nFrankfurt\t2026-09-28T10:00:03Z later',
+        nextId,
+    );
+
+    assert.deepEqual(newLinesSince(existing, incoming).map((line) => [line.source, line.text]), [
+        ['Helsinki', 'next'],
+        ['Frankfurt', 'later'],
+    ]);
+});
+
 test('detects Ctrl+F and Cmd+F only', () => {
     assert.equal(isFindShortcut({ ctrlKey: true, key: 'f' }), true);
     assert.equal(isFindShortcut({ metaKey: true, key: 'F' }), true);

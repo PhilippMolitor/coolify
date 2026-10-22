@@ -1,4 +1,4 @@
-<div>
+<div class="runtime-logs-page">
     <x-slot:title>
         {{ data_get_str($resource, 'name')->limit(10) }} > Logs | Coolify
     </x-slot>
@@ -22,8 +22,10 @@
             || $totalContainers === 0
         );
         $logTargets = $targets ?? null;
-        $selectedLogServer = is_array($logTargets)
-            ? $servers->firstWhere('uuid', $logTargets['server'] ?? null)
+        $logSources = is_array($logTargets) ? ($logTargets['sources'] ?? []) : [];
+        $primarySource = $logSources[0] ?? null;
+        $selectedLogServer = is_array($primarySource)
+            ? $servers->firstWhere('uuid', $primarySource['server'])
             : null;
     @endphp
 
@@ -37,7 +39,7 @@
                 @else
                     <x-service.configuration-sidebar :service="$resource" current-route="project.service.logs" />
                 @endif
-                <div class="min-w-0">
+                <div class="runtime-logs-column min-w-0">
     @endif
 
     <div wire:loading.block wire:target="loadAllContainers" class="hidden w-full">
@@ -80,24 +82,18 @@
                     @endif
                 @endforeach
 
-                @if ($selectedLogServer && filled($logTargets['container'] ?? null))
-                    @if (count($logTargets['servers']) > 1 || count($logTargets['deployments']) > 1 || count($logTargets['services']) > 1)
+                @if ($selectedLogServer && $logSources !== [])
+                    @if (count($logTargets['deployments']) > 1 || count($logTargets['services']) > 1)
                         <div class="flex shrink-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-                            @if (count($logTargets['servers']) > 1)
-                                <div class="w-full sm:w-60" wire:key="runtime-logs-servers-{{ collect($logTargets['servers'])->map(fn (array $option): string => $option['value'].$option['label'])->join('|') }}">
-                                    <x-forms.listbox id="server" label="Server" live searchable portal
-                                        searchPlaceholder="Search servers" :options="$logTargets['servers']" />
-                                </div>
-                            @endif
                             @if (count($logTargets['deployments']) > 1)
-                                <div class="w-full sm:w-60" wire:key="runtime-logs-deployments-{{ collect($logTargets['deployments'])->pluck('value')->join('-') }}">
+                                <div class="w-full sm:w-60" wire:key="runtime-logs-deployments-{{ collect($logTargets['deployments'])->map(fn (array $option): string => $option['value'].$option['labelClass'])->join('-') }}">
                                     <x-forms.listbox id="pullRequestId" label="Deployment" live searchable portal
                                         searchPlaceholder="Search deployments" :options="$logTargets['deployments']" />
                                 </div>
                             @endif
                             @if (count($logTargets['services']) > 1)
-                                <div class="w-full sm:w-60" wire:key="runtime-logs-services-{{ collect($logTargets['services'])->map(fn (array $option): string => $option['value'].$option['label'].$option['description'])->join('|') }}">
-                                    <x-forms.listbox id="selectedContainer" label="Service" live searchable portal
+                                <div class="w-full sm:w-60" wire:key="runtime-logs-services-{{ collect($logTargets['services'])->map(fn (array $option): string => $option['value'].$option['label'].$option['dot'].($option['description'] ?? ''))->join('|') }}">
+                                    <x-forms.listbox id="service" label="Service" live searchable portal
                                         searchPlaceholder="Search services" :options="$logTargets['services']" />
                                 </div>
                             @endif
@@ -105,10 +101,11 @@
                     @endif
 
                     <livewire:project.shared.get-logs
-                        wire:key="runtime-logs-{{ $logTargets['containerId'] }}"
+                        wire:key="runtime-logs-{{ $logTargets['streamKey'] }}"
                         :server="$selectedLogServer"
                         :resource="$resource"
-                        :container="$logTargets['container']"
+                        :container="$primarySource['container']"
+                        :sources="count($logSources) > 1 ? $logSources : []"
                         :collapsible="false"
                         :fill="true" />
                 @else

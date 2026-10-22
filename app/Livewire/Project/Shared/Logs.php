@@ -50,16 +50,11 @@ class Logs extends Component
 
     public bool $containersLoaded = false;
 
-    #[Url(as: 'server', except: '')]
-    public string $server = '';
-
     #[Url(as: 'pull_request_id', except: '0')]
     public string $pullRequestId = '0';
 
     #[Url(as: 'service', except: '')]
     public string $service = '';
-
-    public string $selectedContainer = '';
 
     private bool $syncingSelection = false;
 
@@ -87,17 +82,12 @@ class Logs extends Component
         }
     }
 
-    public function updatedServer(): void
-    {
-        $this->syncLogSelection();
-    }
-
     public function updatedPullRequestId(): void
     {
         $this->syncLogSelection();
     }
 
-    public function updatedSelectedContainer(): void
+    public function updatedService(): void
     {
         $this->syncLogSelection();
     }
@@ -111,10 +101,8 @@ class Logs extends Component
         $this->syncingSelection = true;
 
         $targets = $this->selectionTargets();
-        $this->server = count($targets['servers']) > 1 ? $targets['server'] : '';
         $this->pullRequestId = $targets['deployment'];
         $this->service = $targets['service'];
-        $this->selectedContainer = $targets['container'];
 
         $this->syncingSelection = false;
     }
@@ -225,24 +213,20 @@ class Logs extends Component
 
     /**
      * @return array{
-     *     servers: list<array{value: string, label: string}>,
-     *     deployments: list<array{value: string, label: string}>,
-     *     services: list<array{value: string, label: string, description: string}>,
-     *     server: string,
+     *     deployments: list<array{value: string, label: string, labelClass: string}>,
+     *     services: list<array{value: string, label: string, dot: string, description?: string}>,
      *     deployment: string,
      *     service: string,
-     *     container: string,
-     *     containerId: string,
+     *     sources: list<array{server: string, container: string, label: string}>,
+     *     streamKey: string,
      * }
      */
     private function selectionTargets(): array
     {
         return RuntimeLogTargets::select(
             $this->logServerPayload(),
-            $this->server,
             $this->pullRequestId,
             $this->service,
-            $this->selectedContainer,
             $this->type === 'application',
         );
     }

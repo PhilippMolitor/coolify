@@ -7,106 +7,88 @@ use Illuminate\Support\Collection;
 /**
  * Groups running and stopped containers for the runtime logs page.
  *
- * Servers stay in the order they are given (the resource's primary server first).
+ * A service is one stream. Every container of that service, on every server and
+ * from a rollout that left the previous container behind, is a source of that stream.
  * Deployments are production, then preview pull requests from newest to oldest.
- * Services are alphabetical, with a running container before a stopped one of the same name.
+ * Services are alphabetical.
  */
 class RuntimeLogTargets
 {
     /**
      * @param  list<array{uuid: string, name: string, containers: list<array<string, mixed>>}>  $servers
      * @return array{
-     *     servers: list<array{value: string, label: string}>,
-     *     deployments: list<array{value: string, label: string}>,
-     *     services: list<array{value: string, label: string, description: string}>,
-     *     server: string,
+     *     deployments: list<array{value: string, label: string, labelClass: string}>,
+     *     services: list<array{value: string, label: string, dot: string, description?: string}>,
      *     deployment: string,
      *     service: string,
-     *     container: string,
-     *     containerId: string,
+     *     sources: list<array{server: string, container: string, label: string}>,
+     *     streamKey: string,
      * }
      */
-    public static function select(
-        array $servers,
-        string $server,
-        string $deployment,
-        string $service,
-        string $container,
-        bool $groupDeployments,
-    ): array {
-        $servers = self::normalizeServers($servers, $groupDeployments);
-        if ($servers === []) {
-            return self::emptySelection();
-        }
-
-        $preferredDeployment = self::normalizeDeployment($deployment);
-        $chosenServer = self::pickServer($servers, $server, $preferredDeployment, $groupDeployments);
-        $deployments = $groupDeployments ? self::deploymentOptions($chosenServer['containers']) : [];
-        $deploymentIds = array_column($deployments, 'value');
-        $chosenDeployment = self::pickDeployment($deploymentIds, $preferredDeployment);
-
-        $containers = array_values(array_filter(
-            $chosenServer['containers'],
-            fn (array $item): bool => $item['deployment'] === $chosenDeployment,
-        ));
+    public static function select(array $servers, string $deployment, string $service, bool $groupDeployments): array
+    {
+        $containers = self::containers($servers, $groupDeployments);
         if ($containers === []) {
             return self::emptySelection();
         }
-        usort($containers, self::compareServices(...));
 
-        $chosen = self::pickContainer($containers, $service, $container);
-        $services = self::serviceOptions($containers);
+        $deploymentIds = $groupDeployments ? self::sortedDeploymentIds($containers) : [];
+        $chosenDeployment = $groupDeployments
+            ? self::pickDeployment($deploymentIds, self::normalizeDeployment($deployment))
+            : '0';
+
+        $visible = array_values(array_filter(
+            $containers,
+            fn (array $container): bool => $container['deployment'] === $chosenDeployment,
+        ));
+        if ($visible === []) {
+            return self::emptySelection();
+        }
+
+        $groups = self::groupByService($visible);
+        $chosenKey = self::pickServiceKey($groups, $service);
+        $sources = self::sourcesFor($groups[$chosenKey]);
 
         return [
-            'servers' => array_map(fn (array $item): array => [
-                'value' => $item['uuid'],
-                'label' => $item['name'],
-            ], $servers),
-            'deployments' => $deployments,
-            'services' => $services,
-            'server' => $chosenServer['uuid'],
+            'deployments' => $groupDeployments ? self::deploymentOptions($deploymentIds) : [],
+            'services' => self::serviceOptions($groups),
             'deployment' => $chosenDeployment,
-            'service' => self::serviceParameter($containers, $chosen),
-            'container' => $chosen['name'],
-            'containerId' => $chosen['id'],
+            'service' => count($groups) > 1 ? $chosenKey : '',
+            'sources' => $sources,
+            'streamKey' => self::streamKey($sources),
         ];
     }
 
     /**
      * @return array{
-     *     servers: list<empty>,
      *     deployments: list<empty>,
      *     services: list<empty>,
-     *     server: string,
      *     deployment: string,
      *     service: string,
-     *     container: string,
-     *     containerId: string,
+     *     sources: list<empty>,
+     *     streamKey: string,
      * }
      */
     private static function emptySelection(): array
     {
         return [
-            'servers' => [],
             'deployments' => [],
             'services' => [],
-            'server' => '',
             'deployment' => '0',
             'service' => '',
-            'container' => '',
-            'containerId' => '',
+            'sources' => [],
+            'streamKey' => '',
         ];
     }
 
     /**
      * @param  list<array{uuid: string, name: string, containers: list<array<string, mixed>>}>  $servers
-     * @return list<array{uuid: string, name: string, containers: list<array{name: string, id: string, key: string, state: string, deployment: string}>}>
+     * @return list<array{name: string, key: string, state: string, deployment: string, server: string, serverName: string, serverIndex: int}>
      */
-    private static function normalizeServers(array $servers, bool $groupDeployments): array
+    private static function containers(array $servers, bool $groupDeployments): array
     {
-        $normalized = [];
-        foreach ($servers as $server) {
-            $containers = [];
+        $containers = [];
+        foreach (array_values($servers) as $index => $server) {
             foreach ($server['containers'] ?? [] as $container) {
                 if (! is_array($container)) {
                     continue;
@@ -119,23 +101,17 @@ class RuntimeLogTargets
                 $state = strtolower(trim((string) data_get($container, 'State', 'running')));
                 $containers[] = [
                     'name' => $name,
-                    'id' => (string) (data_get($container, 'ID') ?: $name),
                     'key' => self::serviceKey($name, $labels),
                     'state' => $state !== '' ? $state : 'running',
                     'deployment' => self::deploymentId($labels, $groupDeployments),
+                    'server' => (string) ($server['uuid'] ?? ''),
+                    'serverName' => (string) ($server['name'] ?? ''),
+                    'serverIndex' => $index,
                 ];
             }
-            if ($containers === []) {
-                continue;
-            }
-            $normalized[] = [
-                'uuid' => (string) ($server['uuid'] ?? ''),
-                'name' => (string) ($server['name'] ?? ''),
-                'containers' => $containers,
-            ];
         }
 
-        return $normalized;
+        return $containers;
     }
 
     /**
@@ -192,37 +168,10 @@ class RuntimeLogTargets
     }
 
     /**
-     * @param  list<array{uuid: string, name: string, containers: list<array{deployment: string}>}>  $servers
-     * @return array{uuid: string, name: string, containers: list<array{name: string, id: string, key: string, state: string, deployment: string}>}
-     */
-    private static function pickServer(array $servers, string $requestedServer, string $preferredDeployment, bool $groupDeployments): array
-    {
-        if ($requestedServer !== '') {
-            foreach ($servers as $server) {
-                if ($server['uuid'] === $requestedServer) {
-                    return $server;
-                }
-            }
-        }
-
-        if ($groupDeployments && $preferredDeployment !== '0') {
-            foreach ($servers as $server) {
-                foreach ($server['containers'] as $container) {
-                    if ($container['deployment'] === $preferredDeployment) {
-                        return $server;
-                    }
-                }
-            }
-        }
-
-        return $servers[0];
-    }
-
-    /**
      * @param  list<array{deployment: string}>  $containers
-     * @return list<array{value: string, label: string}>
+     * @return list<string>
      */
-    private static function deploymentOptions(array $containers): array
+    private static function sortedDeploymentIds(array $containers): array
     {
         $ids = array_values(array_unique(array_column($containers, 'deployment')));
         usort($ids, function (string $left, string $right): int {
@@ -236,10 +185,7 @@ class RuntimeLogTargets
             return (int) $right <=> (int) $left;
         });
 
-        return array_map(fn (string $id): array => [
-            'value' => $id,
-            'label' => $id === '0' ? 'Production' : 'Preview #'.$id,
-        ], $ids);
+        return $ids;
     }
 
     /**
@@ -258,129 +204,187 @@ class RuntimeLogTargets
     }
 
     /**
-     * @param  array{key: string, state: string, name: string}  $left
-     * @param  array{key: string, state: string, name: string}  $right
+     * @param  list<string>  $ids
+     * @return list<array{value: string, label: string, labelClass: string}>
      */
-    private static function compareServices(array $left, array $right): int
+    private static function deploymentOptions(array $ids): array
     {
-        $byKey = strcasecmp($left['key'], $right['key']);
-        if ($byKey !== 0) {
-            return $byKey;
-        }
-
-        $byState = ($left['state'] === 'running' ? 0 : 1) <=> ($right['state'] === 'running' ? 0 : 1);
-        if ($byState !== 0) {
-            return $byState;
-        }
-
-        return strcmp($left['name'], $right['name']);
+        return array_map(fn (string $id): array => [
+            'value' => $id,
+            'label' => $id === '0' ? 'Production' : 'PR #'.$id,
+            'labelClass' => $id === '0'
+                ? 'deployment-badge deployment-badge-production'
+                : 'deployment-badge deployment-badge-preview',
+        ], $ids);
     }
 
     /**
-     * @param  list<array{name: string, id: string, key: string, state: string}>  $containers
-     * @return array{name: string, id: string, key: string, state: string}
+     * @param  list<array{key: string}>  $containers
+     * @return array<string, list<array{name: string, key: string, state: string, deployment: string, server: string, serverName: string, serverIndex: int}>>
      */
-    private static function pickContainer(array $containers, string $service, string $container): array
+    private static function groupByService(array $containers): array
     {
-        if ($container !== '') {
-            foreach ($containers as $item) {
-                if ($item['name'] === $container) {
-                    return $item;
-                }
-            }
+        $groups = [];
+        foreach ($containers as $container) {
+            $groups[$container['key']][] = $container;
         }
+        uksort($groups, fn (string $left, string $right): int => strcasecmp($left, $right));
 
-        if ($service !== '') {
-            $byName = null;
-            $byKey = null;
-            $byRunningKey = null;
-            foreach ($containers as $item) {
-                if ($byName === null && $item['name'] === $service) {
-                    $byName = $item;
-                }
-                if ($item['key'] === $service) {
-                    $byKey ??= $item;
-                    if ($byRunningKey === null && $item['state'] === 'running') {
-                        $byRunningKey = $item;
-                    }
-                }
-            }
-            if ($byName !== null) {
-                return $byName;
-            }
-            if ($byRunningKey !== null) {
-                return $byRunningKey;
-            }
-            if ($byKey !== null) {
-                return $byKey;
-            }
-        }
-
-        foreach ($containers as $item) {
-            if ($item['state'] === 'running') {
-                return $item;
-            }
-        }
-
-        return $containers[0];
+        return $groups;
     }
 
     /**
-     * @param  list<array{name: string, id: string, key: string, state: string}>  $containers
-     * @return list<array{value: string, label: string, description: string}>
+     * @param  array<string, list<array{state: string}>>  $groups
      */
-    private static function serviceOptions(array $containers): array
+    private static function pickServiceKey(array $groups, string $service): string
     {
-        $keyCounts = [];
-        foreach ($containers as $container) {
-            $keyCounts[$container['key']] = ($keyCounts[$container['key']] ?? 0) + 1;
+        if ($service !== '' && isset($groups[$service])) {
+            return $service;
         }
 
-        $labels = [];
-        foreach ($containers as $container) {
-            $label = $keyCounts[$container['key']] > 1
-                ? $container['key'].' ('.$container['state'].')'
-                : $container['key'];
-            $labels[] = $label;
+        foreach ($groups as $key => $containers) {
+            foreach ($containers as $container) {
+                if ($container['state'] === 'running') {
+                    return $key;
+                }
+            }
         }
 
-        $labelCounts = array_count_values($labels);
+        return (string) array_key_first($groups);
+    }
+
+    /**
+     * @param  array<string, list<array{state: string}>>  $groups
+     * @return list<array{value: string, label: string, dot: string, description?: string}>
+     */
+    private static function serviceOptions(array $groups): array
+    {
         $options = [];
-        foreach ($containers as $index => $container) {
-            $label = $labels[$index];
-            if ($labelCounts[$label] > 1) {
-                $short = substr($container['id'], 0, 12);
-                $label = $keyCounts[$container['key']] > 1
-                    ? $container['key'].' ('.$container['state'].', '.$short.')'
-                    : $container['key'].' ('.$short.')';
-            }
-            $options[] = [
-                'value' => $container['name'],
-                'label' => $label,
-                'description' => $container['state'],
+        foreach ($groups as $key => $containers) {
+            $option = [
+                'value' => $key,
+                'label' => $key,
+                'dot' => self::serviceDot(array_column($containers, 'state')),
             ];
+            if (count($containers) > 1) {
+                $option['description'] = count($containers).' containers';
+            }
+            $options[] = $option;
         }
 
         return $options;
     }
 
     /**
-     * @param  list<array{name: string, key: string}>  $containers
-     * @param  array{name: string, key: string}  $chosen
+     * @param  list<string>  $states
      */
-    private static function serviceParameter(array $containers, array $chosen): string
+    private static function serviceDot(array $states): string
     {
-        if (count($containers) < 2) {
-            return '';
+        $allRunning = true;
+        $anyLive = false;
+        foreach ($states as $state) {
+            if ($state !== 'running') {
+                $allRunning = false;
+            }
+            if (in_array($state, ['running', 'starting', 'restarting', 'degraded'], true)) {
+                $anyLive = true;
+            }
+        }
+        if ($allRunning) {
+            return 'success';
+        }
+        if (! $anyLive) {
+            return 'error';
         }
 
-        $matches = 0;
+        return 'warning';
+    }
+
+    /**
+     * @param  list<array{name: string, server: string, serverName: string, serverIndex: int}>  $containers
+     * @return list<array{server: string, container: string, label: string}>
+     */
+    private static function sourcesFor(array $containers): array
+    {
+        usort($containers, function (array $left, array $right): int {
+            $byServer = $left['serverIndex'] <=> $right['serverIndex'];
+
+            return $byServer !== 0 ? $byServer : strcmp($left['name'], $right['name']);
+        });
+
+        $serverCounts = [];
         foreach ($containers as $container) {
-            if ($container['key'] === $chosen['key']) {
-                $matches++;
+            $serverCounts[$container['server']] = ($serverCounts[$container['server']] ?? 0) + 1;
+        }
+        $multipleServers = count($serverCounts) > 1;
+        $sources = [];
+        foreach ($containers as $container) {
+            $sources[] = [
+                'server' => $container['server'],
+                'container' => $container['name'],
+                'label' => self::sourceLabel($container, $multipleServers, $serverCounts[$container['server']], count($containers)),
+            ];
+        }
+
+        return self::uniqueLabels($sources);
+    }
+
+    /**
+     * @param  array{name: string, server: string, serverName: string}  $container
+     */
+    private static function sourceLabel(array $container, bool $multipleServers, int $onServer, int $total): string
+    {
+        if ($total < 2) {
+            return $container['name'];
+        }
+
+        $parts = [];
+        if ($multipleServers) {
+            $name = trim($container['serverName']);
+            $parts[] = $name !== '' ? $name : $container['server'];
+        }
+        if ($onServer > 1 || ! $multipleServers) {
+            $parts[] = $container['name'];
+        }
+
+        return implode(' ', $parts);
+    }
+
+    /**
+     * @param  list<array{server: string, container: string, label: string}>  $sources
+     * @return list<array{server: string, container: string, label: string}>
+     */
+    private static function uniqueLabels(array $sources): array
+    {
+        $counts = array_count_values(array_column($sources, 'label'));
+        foreach ($sources as $index => $source) {
+            if ($counts[$source['label']] < 2) {
+                continue;
+            }
+            if (! str_contains($source['label'], $source['container'])) {
+                $sources[$index]['label'] = trim($source['label'].' '.$source['container']);
             }
         }
 
-        return $matches > 1 ? $chosen['name'] : $chosen['key'];
+        $counts = array_count_values(array_column($sources, 'label'));
+        foreach ($sources as $index => $source) {
+            if (($counts[$source['label']] ?? 0) < 2) {
+                continue;
+            }
+            $sources[$index]['label'] = $source['label'].' '.substr($source['server'], 0, 8);
+        }
+
+        return $sources;
+    }
+
+    /**
+     * @param  list<array{server: string, container: string}>  $sources
+     */
+    private static function streamKey(array $sources): string
+    {
+        return implode('|', array_map(
+            fn (array $source): string => $source['server'].':'.$source['container'],
+            $sources,
+        ));
     }
 }

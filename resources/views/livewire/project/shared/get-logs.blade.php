@@ -200,6 +200,7 @@
                                         x-on:click="
                                             open = false;
                                             $wire.copyLogs().then(logs => {
+                                                logs = logs.replace(/^([^\t\n]+)\t/gm, '$1 | ');
                                                 if (!navigator.clipboard?.writeText) {
                                                     Livewire.dispatch('error', ['Clipboard is not available. Please use HTTPS or localhost.']);
                                                     return;
@@ -259,7 +260,7 @@
                     @touchstart="handleTouchStart" @touchmove="handleTouchMove" @keydown="handleKeyScroll" tabindex="0"
                     class="runtime-log-viewport logs-viewer-viewport relative flex min-w-0 w-full flex-col overflow-x-hidden overflow-y-auto scrollbar"
                     :class="fullscreen ? 'flex-1' : '{{ $fill ? 'min-h-0 flex-1' : 'max-h-[min(40rem,70dvh)] sm:max-h-[40rem]' }}'">
-                    <div class="runtime-log-loading" x-show="loading && lineCount === 0" role="status">
+                    <div class="runtime-log-loading" x-show="loading && lineCount === 0" x-cloak role="status">
                         <x-loading compact aria-label="Loading logs" />
                         <span>Loading logs</span>
                     </div>
@@ -274,7 +275,7 @@
                     </div>
                     {{-- Alpine renders only the visible rows. Livewire must not morph them. --}}
                     <div id="logs" wire:ignore x-cloak x-show="lineCount > 0"
-                        :class="{ 'runtime-log-without-time': !$wire.showTimeStamps, 'runtime-log-text-view': textView }"
+                        :class="{ 'runtime-log-without-time': !$wire.showTimeStamps, 'runtime-log-text-view': textView, 'mt-auto': alwaysScroll }"
                         class="font-logs max-w-full cursor-default text-[11px] leading-relaxed sm:text-xs">
                         <div x-ref="columns" x-show="!textView" class="runtime-log-columns" aria-hidden="true">
                             <span x-show="$wire.showTimeStamps">Time</span>
@@ -295,7 +296,7 @@
                                         <template x-if="$wire.showTimeStamps && row.line.ts">
                                             <span class="logs-viewer-timestamp text-gray-500" x-text="formatTimestamp(row.line.ts)"></span>
                                         </template>
-                                        <span data-line-text class="logs-viewer-line-text"><template x-for="(segment, segmentIndex) in highlight(row.line.text)" :key="segmentIndex"><span :class="segment.match ? 'log-highlight' : ''" x-text="segment.text"></span></template></span>
+                                        <span data-line-text class="logs-viewer-line-text"><template x-if="multipleSources && row.line.source"><span class="runtime-log-source" :style="{ color: row.line.sourceColor }" x-text="row.line.source"></span></template><span class="runtime-log-message"><template x-for="(segment, segmentIndex) in highlight(row.line.text)" :key="segmentIndex"><span :class="segment.match ? 'log-highlight' : ''" x-text="segment.text"></span></template></span></span>
                                     </div>
                                     <template x-if="isLogExpanded(row.line.id)">
                                         <pre class="runtime-log-detail" aria-label="Full log entry"

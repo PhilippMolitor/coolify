@@ -4476,9 +4476,26 @@ html[data-theme="custom"] .runtime-log-columns {
 }
 
 .runtime-log-viewport [data-line-text] {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
     grid-column: 3;
     grid-row: 1;
     min-width: 0;
+    overflow: hidden;
+}
+
+.runtime-log-message {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.runtime-log-source {
+    flex: 0 0 8rem;
+    width: 8rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -4532,13 +4549,16 @@ html[data-theme="custom"] .runtime-log-columns {
 
 .runtime-log-viewport .runtime-log-text-view [data-log-line]:not(.hidden) {
     display: flex;
-    gap: 0.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.125rem;
     min-height: 0;
     padding: 0 0.75rem;
     border-bottom: 0;
     cursor: text;
     font-size: 0.75rem;
     line-height: 1.45;
+    text-align: left;
 }
 
 .runtime-log-viewport .runtime-log-text-view [data-log-line]::before,
@@ -4552,10 +4572,25 @@ html[data-theme="custom"] .runtime-log-columns {
 }
 
 .runtime-log-viewport .runtime-log-text-view [data-line-text] {
+    align-items: flex-start;
     flex: 1 1 auto;
     overflow: visible;
     overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.runtime-log-viewport .runtime-log-text-view .runtime-log-message {
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: unset;
     white-space: pre-wrap;
+}
+
+@media (min-width: 640px) {
+    .runtime-log-viewport .runtime-log-text-view [data-log-line]:not(.hidden) {
+        flex-direction: row;
+        gap: 0.5rem;
+    }
 }
 
 .runtime-logs-workspace {
@@ -4580,15 +4615,71 @@ html[data-theme="custom"] .runtime-log-columns {
     min-height: 70dvh;
 }
 
+/* The page fills the area inside <main>. Those paddings live in layouts/app.blade.php:
+   lg:pt-[calc(3rem+1.75rem)] and lg:pb-10. Width stays on that layout's pageWidth wrapper. */
+.runtime-logs-page {
+    display: flex;
+    flex-direction: column;
+}
+
+.runtime-logs-fill .runtime-log-loading,
+.runtime-logs-fill .runtime-log-empty {
+    position: absolute;
+    inset: 0;
+    min-height: 0;
+}
+
 @media (min-width: 1280px) {
-    .runtime-logs-workspace {
-        height: calc(100dvh - 12rem);
+    .runtime-logs-page {
+        min-height: calc(100dvh - 4.75rem - 2.5rem);
+    }
+
+    .runtime-logs-page > .application-settings-workspace {
+        display: flex;
         min-height: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+    }
+
+    .runtime-logs-page > .application-settings-workspace > .grid {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .runtime-logs-column {
+        display: flex;
+        min-height: 0;
+        flex-direction: column;
+    }
+
+    .runtime-logs-column > .w-full {
+        display: flex;
+        min-height: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+    }
+
+    .runtime-logs-workspace {
+        height: auto;
+        min-height: 0;
+        flex: 1 1 auto;
     }
 
     .runtime-logs-fill {
         min-height: 0;
     }
+}
+
+.deployment-badge {
+    @apply inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tracking-wide;
+}
+
+.deployment-badge-production {
+    @apply bg-success/10 text-success uppercase ring-1 ring-success/20;
+}
+
+.deployment-badge-preview {
+    @apply bg-coollabs/10 text-coollabs ring-1 ring-coollabs/20 dark:bg-warning/10 dark:text-warning dark:ring-warning/20;
 }
 
 .runtime-logs-fill .runtime-log-viewport {

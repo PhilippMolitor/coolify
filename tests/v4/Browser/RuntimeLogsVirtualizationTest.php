@@ -192,3 +192,82 @@ it('opens runtime logs in text view and remembers the choice', function () {
 
     expect($page->script('document.getElementById("logs").classList.contains("runtime-log-text-view")'))->toBeTrue();
 });
+
+it('keeps log text left aligned and the first line against the top of the viewport', function () {
+    $application = createBrowserApplication($this->stack, ['uuid' => 'app-runtime-logs']);
+    $lines = implode("\n", array_map(
+        fn (int $i) => sprintf('2026-09-28T10:00:%02dZ layout line %05d', $i, $i),
+        range(1, 40),
+    ));
+    Process::fake(function (PendingProcess $process) use ($lines) {
+        $command = is_array($process->command) ? implode(' ', $process->command) : (string) $process->command;
+        if (str_contains($command, 'docker logs')) {
+            return Process::result(output: $lines);
+        }
+        if (str_contains($command, 'docker ps')) {
+            return Process::result(output: json_encode([
+                'ID' => 'appcontainer',
+                'Names' => 'appcontainer',
+                'State' => 'running',
+                'Labels' => 'coolify.pullRequestId=0,com.docker.compose.service=web',
+            ])."\n");
+        }
+
+        return Process::result();
+    });
+
+    $url = applicationConfigurationUrl($this->stack['project'], $this->stack['environment'], $application).'/logs';
+    $page = visit('/login')
+        ->fill('email', 'test@example.com')
+        ->fill('password', 'password')
+        ->click('Login')
+        ->assertSee('Dashboard');
+
+    $page->script('localStorage.setItem("pageWidth", "full"); localStorage.removeItem("coolify-log-text-view");');
+    $page->resize(1800, 960)
+        ->navigate($url)
+        ->wait(1)
+        ->assertSee('layout line 00001');
+
+    expect($page->script(<<<'JS'
+        (() => {
+            const line = document.querySelector('[data-log-line]');
+            const viewport = document.getElementById('logsContainer');
+            const style = getComputedStyle(line);
+            const topGap = Math.abs(line.getBoundingClientRect().top - viewport.getBoundingClientRect().top);
+            const main = document.querySelector('main');
+            const workspace = document.querySelector('.runtime-logs-workspace');
+            const column = document.querySelector('.runtime-logs-column');
+            const padding = parseFloat(getComputedStyle(main).paddingBottom);
+            const bottomGap = main.getBoundingClientRect().bottom - workspace.getBoundingClientRect().bottom;
+            const widthGap = Math.abs(workspace.getBoundingClientRect().width - column.getBoundingClientRect().width);
+            return viewport.scrollTop === 0 && topGap < 2 && Math.abs(bottomGap - padding) < 2 && widthGap < 2
+                && style.textAlign !== 'center' && style.alignItems !== 'center';
+        })()
+    JS))->toBeTrue();
+
+    $fullWidth = $page->script('document.querySelector(".runtime-logs-workspace").getBoundingClientRect().width');
+
+    $page->script('localStorage.setItem("pageWidth", "centered")');
+    $page->navigate($url)
+        ->assertSee('layout line 00001');
+
+    expect($page->script('document.querySelector(".runtime-logs-workspace").getBoundingClientRect().width'))
+        ->toBeLessThan($fullWidth);
+
+    $page->resize(390, 844)
+        ->assertSee('layout line 00001');
+
+    expect($page->script(<<<'JS'
+        (() => {
+            const line = document.querySelector('[data-log-line]');
+            const style = getComputedStyle(line);
+            const viewport = document.getElementById('logsContainer');
+            const topGap = Math.abs(line.getBoundingClientRect().top - viewport.getBoundingClientRect().top);
+            return viewport.scrollTop === 0 && topGap < 2
+                && style.flexDirection === 'column'
+                && style.alignItems === 'flex-start'
+                && (style.textAlign === 'left' || style.textAlign === 'start');
+        })()
+    JS))->toBeTrue();
+});
