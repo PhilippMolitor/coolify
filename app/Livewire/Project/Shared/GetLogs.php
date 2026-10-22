@@ -66,6 +66,8 @@ class GetLogs extends Component
 
     public bool $collapsible = true;
 
+    public bool $fill = false;
+
     public function mount()
     {
         if (! is_null($this->resource)) {

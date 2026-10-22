@@ -1,11 +1,11 @@
-<div>
+<div @class(['flex min-h-0 min-w-0 flex-1 flex-col' => $fill])>
 @if (! $canReadLogs)
     <x-callout type="info" title="Hidden (only admins can view)">
         Container logs can contain secrets.
     </x-callout>
 @else
-<div @class(['w-full min-w-0', 'runtime-log-shell' => $collapsible])>
-    <div id="screen" x-data="runtimeLogs(@js([
+<div @class(['w-full min-w-0', 'runtime-log-shell' => $collapsible, 'runtime-logs-fill flex flex-1 flex-col' => $fill])>
+    <div id="screen" @class(['flex min-h-0 flex-1 flex-col' => $fill]) x-data="runtimeLogs(@js([
         'collapsible' => $collapsible,
         'expanded' => $expandByDefault || ! $collapsible,
         'containerName' => $container ?? 'logs',
@@ -35,10 +35,11 @@
             </div>
         @endif
         <div x-show="expanded" {{ $collapsible ? 'x-collapse.duration.200ms' : '' }}
-            :class="fullscreen ? 'fullscreen flex flex-col !overflow-visible' : 'relative w-full mx-auto'"
+            @class(['runtime-logs-stream', 'relative flex min-h-0 w-full flex-1 flex-col' => $fill, 'relative mx-auto w-full' => ! $fill])
+            :class="fullscreen ? 'fullscreen flex flex-col !overflow-visible' : ''"
             :style="fullscreen ? 'max-height: none !important; height: 100% !important;' : ''">
             <div class="runtime-log-panel"
-                :class="fullscreen ? 'h-full w-full' : ''">
+                :class="fullscreen ? 'h-full w-full' : '{{ $fill ? 'flex min-h-0 flex-1 flex-col' : '' }}'">
                 <div class="runtime-log-toolbar logs-viewer-toolbar">
                     <div class="logs-viewer-toolbar-controls">
                         <div class="logs-viewer-actions">
@@ -257,7 +258,7 @@
                 <div id="logsContainer" x-ref="viewport" @scroll="handleScroll" @wheel="handleWheel"
                     @touchstart="handleTouchStart" @touchmove="handleTouchMove" @keydown="handleKeyScroll" tabindex="0"
                     class="runtime-log-viewport logs-viewer-viewport relative flex min-w-0 w-full flex-col overflow-x-hidden overflow-y-auto scrollbar"
-                    :class="fullscreen ? 'flex-1' : 'max-h-[min(40rem,70dvh)] sm:max-h-[40rem]'">
+                    :class="fullscreen ? 'flex-1' : '{{ $fill ? 'min-h-0 flex-1' : 'max-h-[min(40rem,70dvh)] sm:max-h-[40rem]' }}'">
                     <div class="runtime-log-loading" x-show="loading && lineCount === 0" role="status">
                         <x-loading compact aria-label="Loading logs" />
                         <span>Loading logs</span>

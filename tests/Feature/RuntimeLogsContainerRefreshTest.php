@@ -3,17 +3,20 @@
 use App\Livewire\Project\Shared\Logs;
 use App\Models\Application;
 use App\Models\Environment;
+use App\Models\InstanceSettings;
 use App\Models\Project;
 use App\Models\Server;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
 function runtimeLogsApplication(): array
 {
+    InstanceSettings::forceCreate(['id' => 0]);
     $user = User::factory()->create();
     $team = Team::factory()->create();
     $user->teams()->attach($team, ['role' => 'owner']);
@@ -84,3 +87,65 @@ it('keeps the container lookup error instead of reporting no running containers'
         ->and($html)->toContain('No query results for model [App\\Models\\PrivateKey]')
         ->and($html)->not->toContain('No containers are running');
 });
+
+it('shows one log viewer for the selected deployment instead of an accordion', function () {
+    [$team, $server, $application] = runtimeLogsApplication();
+    $edge = Server::factory()->create(['team_id' => $team->id, 'name' => 'Edge']);
+
+    $component = Livewire::test(Logs::class)
+        ->set('resource', $application)
+        ->set('type', 'application')
+        ->set('servers', collect([$server, $edge]))
+        ->set('serverContainers', [
+            $server->id => [
+                ['ID' => 'app', 'Names' => 'app', 'State' => 'running', 'Labels' => 'coolify.pullRequestId=0,com.docker.compose.service=web'],
+                ['ID' => 'preview-web', 'Names' => 'app-pr-12-web', 'State' => 'running', 'Labels' => 'coolify.pullRequestId=12,com.docker.compose.service=web'],
+                ['ID' => 'preview-api', 'Names' => 'app-pr-12-api', 'State' => 'running', 'Labels' => 'coolify.pullRequestId=12,com.docker.compose.service=api'],
+            ],
+            $edge->id => [
+                ['ID' => 'edge-app', 'Names' => 'edge-app', 'State' => 'running', 'Labels' => 'coolify.pullRequestId=0,com.docker.compose.service=web'],
+            ],
+        ])
+        ->set('containersLoaded', true)
+        ->set('pullRequestId', '12');
+
+    $component->assertSet('selectedContainer', 'app-pr-12-api')
+        ->assertSee('Search servers')
+        ->assertSee('Search deployments')
+        ->assertSee('Preview #12')
+        ->assertSee('Search services')
+        ->assertDontSee('runtime-log-trigger');
+
+    expect(runtimeLogViewerCount($component->html()))->toBe(1);
+});
+
+it('hides server and service selectors when production is the only container', function () {
+    [, $server, $application] = runtimeLogsApplication();
+
+    $component = Livewire::test(Logs::class)
+        ->set('resource', $application)
+        ->set('type', 'application')
+        ->set('servers', collect([$server]))
+        ->set('serverContainers', [
+            $server->id => [
+                ['ID' => 'app', 'Names' => 'app', 'State' => 'running', 'Labels' => 'coolify.pullRequestId=0'],
+            ],
+        ])
+        ->set('containersLoaded', true)
+        ->call('syncLogSelection');
+
+    $component->assertSet('selectedContainer', 'app')
+        ->assertDontSee('Search servers')
+        ->assertDontSee('Search deployments')
+        ->assertDontSee('Search services')
+        ->assertDontSee('runtime-log-trigger');
+
+    expect(runtimeLogViewerCount($component->html()))->toBe(1);
+});
+
+function runtimeLogViewerCount(string $html): int
+{
+    $workspace = (string) str($html)->after('class="runtime-logs-workspace"')->before('</section>');
+
+    return preg_match_all('/project\.shared\.get-logs|<div wire:id="/', $workspace);
+}

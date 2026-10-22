@@ -13,8 +13,10 @@ use App\Models\StandaloneMysql;
 use App\Models\StandalonePostgresql;
 use App\Models\StandaloneRedis;
 use App\Models\StandaloneSqlite;
+use App\Support\RuntimeLogTargets;
 use App\Traits\ListensToTeamChannel;
 use Illuminate\Support\Collection;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class Logs extends Component
@@ -48,6 +50,19 @@ class Logs extends Component
 
     public bool $containersLoaded = false;
 
+    #[Url(as: 'server', except: '')]
+    public string $server = '';
+
+    #[Url(as: 'pull_request_id', except: '0')]
+    public string $pullRequestId = '0';
+
+    #[Url(as: 'service', except: '')]
+    public string $service = '';
+
+    public string $selectedContainer = '';
+
+    private bool $syncingSelection = false;
+
     public function getListeners()
     {
         return $this->teamChannelListeners([
@@ -63,11 +78,45 @@ class Logs extends Component
                 $this->serverContainers[$server->id] = $this->getContainersForServer($server);
             }
             $this->containersLoaded = true;
+            $this->syncLogSelection();
         } catch (\Exception $e) {
-            $this->containersLoaded = true; // Set to true to stop loading spinner
+            $this->containersLoaded = true;
+            $this->syncLogSelection();
 
             return handleError($e, $this);
         }
+    }
+
+    public function updatedServer(): void
+    {
+        $this->syncLogSelection();
+    }
+
+    public function updatedPullRequestId(): void
+    {
+        $this->syncLogSelection();
+    }
+
+    public function updatedSelectedContainer(): void
+    {
+        $this->syncLogSelection();
+    }
+
+    public function syncLogSelection(): void
+    {
+        if ($this->syncingSelection || ! $this->containersLoaded) {
+            return;
+        }
+
+        $this->syncingSelection = true;
+
+        $targets = $this->selectionTargets();
+        $this->server = count($targets['servers']) > 1 ? $targets['server'] : '';
+        $this->pullRequestId = $targets['deployment'];
+        $this->service = $targets['service'];
+        $this->selectedContainer = $targets['container'];
+
+        $this->syncingSelection = false;
     }
 
     private function getContainersForServer($server)
@@ -169,18 +218,59 @@ class Logs extends Component
                 }
             }
             $this->containers = $this->containers->sort();
-            if (data_get($this->query, 'pull_request_id')) {
-                $this->containers = $this->containers->filter(function ($container) {
-                    return str_contains($container, $this->query['pull_request_id']);
-                });
-            }
         } catch (\Exception $e) {
             return handleError($e, $this);
         }
     }
 
+    /**
+     * @return array{
+     *     servers: list<array{value: string, label: string}>,
+     *     deployments: list<array{value: string, label: string}>,
+     *     services: list<array{value: string, label: string, description: string}>,
+     *     server: string,
+     *     deployment: string,
+     *     service: string,
+     *     container: string,
+     *     containerId: string,
+     * }
+     */
+    private function selectionTargets(): array
+    {
+        return RuntimeLogTargets::select(
+            $this->logServerPayload(),
+            $this->server,
+            $this->pullRequestId,
+            $this->service,
+            $this->selectedContainer,
+            $this->type === 'application',
+        );
+    }
+
+    /**
+     * @return list<array{uuid: string, name: string, containers: list<array<string, mixed>>}>
+     */
+    private function logServerPayload(): array
+    {
+        if (! isset($this->servers)) {
+            return [];
+        }
+
+        return $this->servers
+            ->filter(fn ($server): bool => count($this->serverContainers[$server->id] ?? []) > 0)
+            ->map(fn ($server): array => [
+                'uuid' => (string) $server->uuid,
+                'name' => (string) $server->name,
+                'containers' => array_values($this->serverContainers[$server->id] ?? []),
+            ])
+            ->values()
+            ->all();
+    }
+
     public function render()
     {
-        return view('livewire.project.shared.logs');
+        return view('livewire.project.shared.logs', [
+            'targets' => $this->containersLoaded ? $this->selectionTargets() : null,
+        ]);
     }
 }

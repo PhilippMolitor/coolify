@@ -9,12 +9,19 @@ import {
     lastTimestamp,
     newLinesSince,
     parseLogLines,
+    prefersTextView,
 } from './runtime-logs.js';
 
 const idGenerator = () => {
     let id = 0;
     return () => ++id;
 };
+
+test('text view is the default unless it was turned off', () => {
+    assert.equal(prefersTextView(null), true);
+    assert.equal(prefersTextView('true'), true);
+    assert.equal(prefersTextView('false'), false);
+});
 
 test('parses docker timestamped lines and skips blank lines', () => {
     const lines = parseLogLines(

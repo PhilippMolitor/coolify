@@ -158,6 +158,10 @@ function downloadText(content, filename) {
     URL.revokeObjectURL(url);
 }
 
+export function prefersTextView(stored) {
+    return stored !== 'false';
+}
+
 export function initializeRuntimeLogsComponent() {
     window.Alpine.data('runtimeLogs', (config = {}) => {
         let lines = [];
@@ -188,7 +192,7 @@ export function initializeRuntimeLogsComponent() {
             scrollDebounce: null,
             destroyed: false,
             colorLogs: localStorage.getItem('coolify-color-logs') === 'true',
-            textView: localStorage.getItem('coolify-log-text-view') === 'true',
+            textView: prefersTextView(localStorage.getItem('coolify-log-text-view')),
             logFilters: readLogFilters(localStorage.getItem('coolify-log-filters')),
             searchQuery: '',
             appliedQuery: '',
