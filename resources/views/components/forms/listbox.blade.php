@@ -284,15 +284,17 @@
                                 <button type="button" class="listbox-option" role="option"
                                     :class="{ 'listbox-option-disabled': option.disabled }"
                                     :aria-selected="isSelected(option)" @click="choose(option)">
-                                    <span x-show="option.dot" class="size-1.5 shrink-0 rounded-full" :class="dotClass(option.dot)"></span>
-                                    <span class="flex min-w-0 flex-col">
-                                        <span class="truncate" :class="option.labelClass" x-text="option.label"></span>
-                                        <span x-show="option.description" x-text="option.description"
-                                            class="text-xs whitespace-normal text-neutral-500 dark:text-fg-dim"></span>
+                                    <span class="flex min-w-0 items-center gap-2 text-left">
+                                        <span x-show="option.dot" class="size-1.5 shrink-0 rounded-full" :class="dotClass(option.dot)"></span>
+                                        <span class="flex min-w-0 flex-col items-start">
+                                            <span class="truncate" :class="option.labelClass" x-text="option.label"></span>
+                                            <span x-show="option.description" x-text="option.description"
+                                                class="text-xs whitespace-normal text-neutral-500 dark:text-fg-dim"></span>
+                                        </span>
                                     </span>
                                     <svg x-show="isSelected(option)" xmlns="http://www.w3.org/2000/svg"
                                         fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"
-                                        class="size-3.5 shrink-0">
+                                        class="ml-auto size-3.5 shrink-0">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                     </svg>
                                 </button>
@@ -350,15 +352,17 @@
                             <button type="button" class="listbox-option" role="option"
                                 :class="{ 'listbox-option-disabled': option.disabled }"
                                 :aria-selected="isSelected(option)" @click="choose(option)">
-                                <span x-show="option.dot" class="size-1.5 shrink-0 rounded-full" :class="dotClass(option.dot)"></span>
-                                <span class="flex min-w-0 flex-col">
-                                    <span class="truncate" :class="option.labelClass" x-text="option.label"></span>
-                                    <span x-show="option.description" x-text="option.description"
-                                        class="text-xs whitespace-normal text-neutral-500 dark:text-fg-dim"></span>
+                                <span class="flex min-w-0 items-center gap-2 text-left">
+                                    <span x-show="option.dot" class="size-1.5 shrink-0 rounded-full" :class="dotClass(option.dot)"></span>
+                                    <span class="flex min-w-0 flex-col items-start">
+                                        <span class="truncate" :class="option.labelClass" x-text="option.label"></span>
+                                        <span x-show="option.description" x-text="option.description"
+                                            class="text-xs whitespace-normal text-neutral-500 dark:text-fg-dim"></span>
+                                    </span>
                                 </span>
                                 <svg x-show="isSelected(option)" xmlns="http://www.w3.org/2000/svg"
                                     fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"
-                                    class="size-3.5 shrink-0">
+                                    class="ml-auto size-3.5 shrink-0">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                 </svg>
                             </button>
